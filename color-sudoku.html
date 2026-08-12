@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Sudoku</title>
+    <style>
+        :root {
+            --bg-color: #f5f6fa;
+            --grid-border: #2f3640;
+            --thin-border: #dcdde1;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #2f3640;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        select, button {
+            padding: 10px 15px;
+            font-size: 14px;
+            border-radius: 6px;
+            border: 1px solid #ccd1d9;
+            background-color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #f5f6fa;
+        }
+
+        #new-game-btn {
+            background-color: #4cd964;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+
+        #new-game-btn:hover {
+            background-color: #44c759;
+        }
+
+        /* 9x9 Board Layout */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(9, 50px);
+            grid-template-rows: repeat(9, 50px);
+            border: 3px solid var(--grid-border);
+            background-color: var(--grid-border);
+            gap: 1px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .cell {
+            background-color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s;
+            user-select: none;
+        }
+
+        /* Thick borders for 3x3 blocks */
+        .cell:nth-child(3n) { border-right: 2px solid var(--grid-border); }
+        .cell:nth-child(9n) { border-right: none; }
+        .cell.row-2, .cell.row-5 { border-bottom: 2px solid var(--grid-border); }
+
+        .cell.given {
+            cursor: not-allowed;
+            position: relative;
+        }
+
+        /* Indicator to differentiate starting clues from player moves */
+        .cell.given::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        .cell.selected {
+            outline: 3px solid #007aff;
+            outline-offset: -3px;
+            z-index: 10;
+        }
+
+        /* Palette Layout */
+        .palette-container {
+            margin-top: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .palette {
+            display: flex;
+            gap: 8px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .palette-color {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            box-sizing: border-box;
+        }
+
+        .palette-color.selected-color {
+            border-color: #2f3640;
+            transform: scale(1.1);
+        }
+
+        .erase-btn {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+
+        .erase-btn:hover {
+            background-color: #c0392b;
+        }
+
+        .message {
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 18px;
+            height: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Color Sudoku</h1>
+
+    <div class="controls">
+        <label for="difficulty">Difficulty:</label>
+        <select id="difficulty">
+            <option value="easy">Easy (36-45 clues)</option>
+            <option value="medium" selected>Medium (30-35 clues)</option>
+            <option value="hard">Hard (26-30 clues)</option>
+            <option value="expert">Expert (22-26 clues)</option>
+            <option value="master">Master (&lt; 22 clues)</option>
+        </select>
+        <button id="new-game-btn">Generate Puzzle</button>
+        <button id="check-btn">Check Solution</button>
+    </div>
+
+    <div class="board" id="sudoku-board"></div>
+
+    <div class="palette-container">
+        <div>Select a color to paint cells:</div>
+        <div class="palette" id="color-palette"></div>
+    </div>
+
+    <div class="message" id="game-message"></div>
+
+    <script>
+        // Mapping numbers to the requested hex values
+        const COLOR_MAP = {
+            0: "white",
+            1: "#FF2D55", // Red
+            2: "#FF9500", // Orange
+            3: "#FFCC00", // Yellow
+            4: "#4CD964", // Green
+            5: "#5AC8FA", // Light Blue
+            6: "#007AFF", // Dark Blue
+            7: "#5856D6", // Purple
+            8: "#FF7300", // Coral
+            9: "#A4B0BE"  // Gray
+        };
+
+        let solutionBoard = [];
+        let playerBoard = [];
+        let initialMask = []; // True if the cell is a "given" clue
+        let selectedColorNum = 1; // Default tool is color #1
+
+        // Difficulty bounds rule dictionary
+        const DIFFICULTY_RANGES = {
+            easy:,
+            medium:,
+            hard:,
+            expert:,
+            master: [17, 21] 
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            initPalette();
+            generateNewGame();
+
+            document.getElementById("new-game-btn").addEventListener("click", generateNewGame);
+            document.getElementById("check-btn").addEventListener("click", checkSolution);
+        });
+
+        // Initialize color picker UI element
+        function initPalette() {
+            const paletteDiv = document.getElementById("color-palette");
+            paletteDiv.innerHTML = "";
+
+            // Create buttons for colors 1-9
+            for (let i = 1; i <= 9; i++) {
+                const btn = document.createElement("div");
+                btn.className = `palette-color ${i === 1 ? 'selected-color' : ''}`;
+                btn.style.backgroundColor = COLOR_MAP[i];
+                btn.dataset.num = i;
+                btn.addEventListener("click", () => selectPaletteColor(i));
+                paletteDiv.appendChild(btn);
+            }
+
+            // Eraser Tool
+            const eraser = document.createElement("button");
+            eraser.className = "erase-btn";
+            eraser.innerText = "Eraser";
+            eraser.addEventListener("click", () => selectPaletteColor(0));
+            paletteDiv.appendChild(eraser);
+        }
+
+        function selectPaletteColor(num) {
+            selectedColorNum = num;
+            document.querySelectorAll(".palette-color").forEach(btn => {
+                btn.classList.remove("selected-color");
+                if (parseInt(btn.dataset.num) === num) {
+                    btn.classList.add("selected-color");
+                }
+            });
+            setMessage("");
+        }
+
+        // Generate entire engine grid
+        function generateNewGame() {
+            setMessage("");
+            solutionBoard = generateValidSudoku();
+            
+            // Choose counts based on UI options dropdown
+            const diff = document.getElementById("difficulty").value;
+            const range = DIFFICULTY_RANGES[diff];
+            const targetGivens = Math.floor(Math.random() * (range[1] - range[0] + 1)) + range[0];
+
+            // Strip board values down to target counts
+            playerBoard = JSON.parse(JSON.stringify(solutionBoard));
+            initialMask = Array(9).fill(null).map(() => Array(9).fill(false));
+
+            let currentGivens = 81;
+            const cellsIndices = Array.from({length: 81}, (_, i) => i);
+            // Shuffle index removal list
+            cellsIndices.sort(() => Math.random() - 0.5);
+
+            for (let idx of cellsIndices) {
+                if (currentGivens <= targetGivens) break;
+                const r = Math.floor(idx / 9);
+                const c = idx % 9;
+                playerBoard[r][c] = 0;
+                currentGivens--;
+            }
+
+            // Flag remaining components as starting rules
+            for(let r=0; r<9; r++) {
+                for(let c=0; c<9; c++) {
+                    if(playerBoard[r][c] !== 0) {
+                        initialMask[r][c] = true;
+                    }
+                }
+            }
+
+            renderBoard();
+        }
+
+        // Draw cells out to HTML DOM
+        function renderBoard() {
+            const boardDiv = document.getElementById("sudoku-board");
+            boardDiv.innerHTML = "";
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cellValue = playerBoard[r][c];
+                    const cellDiv = document.createElement("div");
+                    
+                    cellDiv.className = `cell row-${r} col-${c}`;
+                    cellDiv.style.backgroundColor = COLOR_MAP[cellValue];
+
+                    if (initialMask[r][c]) {
+                        cellDiv.classList.add("given");
+                    } else {
+                        // Attach Click handler to empty spaces
+                        cellDiv.addEventListener("click", () => handleCellClick(r, c));
+                    }
+
+                    boardDiv.appendChild(cellDiv);
+                }
+            }
+        }
+
+        function handleCellClick(r, c) {
+            playerBoard[r][c] = selectedColorNum;
+            renderBoard();
+        }
+
